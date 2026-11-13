@@ -19,6 +19,9 @@ class AstronautTrainingManager {
     /* ---- input ---- */
     this.keys  = {};
     this.mouse = { x: 0, y: 0, down: false };
+    this.joystick = { x: 0, y: 0, active: false };
+    this.touchControlsSpawned = false;
+    this._lastPhase = null;
 
     /* ---- player ---- */
     this.player = {
@@ -28,7 +31,8 @@ class AstronautTrainingManager {
       r: 10,
       dir: 0,              /* radians */
       slowTimer: 0,
-      emoji: '🧑‍🚀'
+      emoji: '🧑‍🚀',
+      target: null
     };
 
     /* ---- task completion flags ---- */
@@ -90,12 +94,16 @@ class AstronautTrainingManager {
     this._notifications = [];
 
     /* Bound event handlers */
-    this._boundKeyDown   = this._onKeyDown.bind(this);
-    this._boundKeyUp     = this._onKeyUp.bind(this);
-    this._boundMouseMove = this._onMouseMove.bind(this);
-    this._boundClick     = this._onClick.bind(this);
-    this._boundMouseDown = this._onMouseDown.bind(this);
-    this._boundMouseUp   = this._onMouseUp.bind(this);
+    this._boundKeyDown     = this._onKeyDown.bind(this);
+    this._boundKeyUp       = this._onKeyUp.bind(this);
+    this._boundMouseMove   = this._onMouseMove.bind(this);
+    this._boundClick       = this._onClick.bind(this);
+    this._boundMouseDown   = this._onMouseDown.bind(this);
+    this._boundMouseUp     = this._onMouseUp.bind(this);
+    this._boundTouchStart  = this._onTouchStart.bind(this);
+    this._boundTouchMove   = this._onTouchMove.bind(this);
+    this._boundTouchEnd    = this._onTouchEnd.bind(this);
+    this._boundTouchCancel = this._onTouchCancel.bind(this);
   }
 
   /* ============================================================
@@ -323,6 +331,10 @@ class AstronautTrainingManager {
   cleanup() {
     if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = null; }
     this._removeEvents();
+    const overlay = document.getElementById('station-touch-overlay');
+    if (overlay) overlay.remove();
+    const bar = document.getElementById('station-subgame-touchbar');
+    if (bar) bar.remove();
     if (this.canvas && this.canvas.parentNode) {
       this.canvas.parentNode.removeChild(this.canvas);
     }
@@ -669,8 +681,14 @@ class AstronautTrainingManager {
     this.container.innerHTML = '';
 
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:relative;overflow:auto;user-select:none;max-width:760px;margin:0 auto;';
+    wrap.style.cssText = 'position:relative;overflow:hidden;user-select:none;max-width:760px;margin:0 auto;touch-action:none;';
     this.container.appendChild(wrap);
+
+    /* Auto-detect touch / mobile screens to spawn controls by default */
+    const isTouchOrMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 850);
+    if (isTouchOrMobile) {
+      this.touchControlsSpawned = true;
+    }
 
     /* In-Game Top Toolbar */
     const toolbar = document.createElement('div');
@@ -679,7 +697,7 @@ class AstronautTrainingManager {
       margin-bottom:8px;flex-wrap:wrap;gap:8px;font-family:'Outfit',sans-serif;
     `;
     toolbar.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <button id="game-nav-home-btn" style="
           display:flex;align-items:center;gap:5px;
           padding:6px 12px;background:#1E293B;color:#94A3B8;
@@ -696,6 +714,19 @@ class AstronautTrainingManager {
           border:1px solid #0284C7;border-radius:8px;
           font-size:.78rem;font-weight:700;cursor:pointer;transition:all 0.15s;">
           <span>←</span> <span>${isAr ? 'مركز التدريب' : 'Hub Overview'}</span>
+        </button>
+
+        <!-- Touch / Joystick Spawn Button -->
+        <button id="game-touch-toggle-btn" style="
+          display:flex;align-items:center;gap:6px;
+          padding:6px 12px;
+          background:${this.touchControlsSpawned ? 'rgba(14,165,233,0.2)' : '#0F172A'};
+          color:${this.touchControlsSpawned ? '#38BDF8' : '#94A3B8'};
+          border:1.5px solid ${this.touchControlsSpawned ? '#38BDF8' : '#334155'};
+          border-radius:8px;
+          font-size:.78rem;font-weight:700;cursor:pointer;transition:all 0.15s;
+          box-shadow:${this.touchControlsSpawned ? '0 0 12px rgba(56,189,248,0.35)' : 'none'};">
+          <span>🕹️</span> <span id="game-touch-toggle-label">${this.touchControlsSpawned ? (isAr ? 'تحكم اللمس: مفعل' : 'Touch Controls: ON') : (isAr ? 'إظهار أذرع اللمس' : 'Spawn Touch / Joystick')}</span>
         </button>
       </div>
 
@@ -729,20 +760,38 @@ class AstronautTrainingManager {
       this.phase = 'hub';
       this._renderHub();
     });
+    toolbar.querySelector('#game-touch-toggle-btn').addEventListener('click', () => {
+      this.toggleTouchControls();
+    });
     toolbar.querySelector('#game-logout-btn').addEventListener('click', () => this._handleLogout());
     toolbar.querySelector('#game-reset-btn').addEventListener('click', () => this._showResetConfirmationModal());
+
+    /* Canvas Container for relative positioning of mobile touch overlay */
+    const canvasWrap = document.createElement('div');
+    canvasWrap.id = 'station-canvas-container';
+    canvasWrap.style.cssText = 'position:relative;width:100%;max-width:760px;margin:0 auto;border-radius:10px;overflow:hidden;touch-action:none;';
+    wrap.appendChild(canvasWrap);
 
     this.canvas = document.createElement('canvas');
     this.canvas.width  = 760;
     this.canvas.height = 480;
     this.canvas.style.cssText = `
       display:block;
+      width:100%;
+      height:auto;
       background:#0B0F19;
       border-radius:10px;
       cursor:crosshair;
-      max-width:100%;`;
-    wrap.appendChild(this.canvas);
+      touch-action:none;
+      box-shadow:0 8px 30px rgba(0,0,0,0.6);`;
+    canvasWrap.appendChild(this.canvas);
     this.ctx = this.canvas.getContext('2d');
+
+    /* Build floating touch controls (Virtual Joystick + [E] Button) */
+    this._initTouchControls(canvasWrap);
+
+    /* Build subgame touch controls bar below canvas */
+    this._initSubgameTouchBar(wrap);
 
     this._attachEvents();
     this.phase    = 'playing';
@@ -751,7 +800,7 @@ class AstronautTrainingManager {
   }
 
   /* ============================================================
-     EVENT HANDLING
+     EVENT HANDLING & TOUCH CONTROLS
   ============================================================ */
   _attachEvents() {
     window.addEventListener('keydown',  this._boundKeyDown);
@@ -760,6 +809,11 @@ class AstronautTrainingManager {
     this.canvas.addEventListener('mousedown', this._boundMouseDown);
     this.canvas.addEventListener('mouseup',   this._boundMouseUp);
     this.canvas.addEventListener('click',     this._boundClick);
+
+    this.canvas.addEventListener('touchstart',  this._boundTouchStart,  { passive: false });
+    this.canvas.addEventListener('touchmove',   this._boundTouchMove,   { passive: false });
+    this.canvas.addEventListener('touchend',    this._boundTouchEnd,    { passive: false });
+    this.canvas.addEventListener('touchcancel', this._boundTouchCancel, { passive: false });
   }
 
   _removeEvents() {
@@ -770,6 +824,694 @@ class AstronautTrainingManager {
       this.canvas.removeEventListener('mousedown', this._boundMouseDown);
       this.canvas.removeEventListener('mouseup',   this._boundMouseUp);
       this.canvas.removeEventListener('click',     this._boundClick);
+
+      this.canvas.removeEventListener('touchstart',  this._boundTouchStart);
+      this.canvas.removeEventListener('touchmove',   this._boundTouchMove);
+      this.canvas.removeEventListener('touchend',    this._boundTouchEnd);
+      this.canvas.removeEventListener('touchcancel', this._boundTouchCancel);
+    }
+  }
+
+  _getCanvasCoords(e) {
+    if (!this.canvas) return { x: 0, y: 0 };
+    const rect = this.canvas.getBoundingClientRect();
+    const touch = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
+    const clientX = touch ? touch.clientX : e.clientX;
+    const clientY = touch ? touch.clientY : e.clientY;
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top)  * scaleY
+    };
+  }
+
+  _onTouchStart(e) {
+    if (!this.canvas) return;
+    if (e.cancelable) e.preventDefault();
+    const { x, y } = this._getCanvasCoords(e);
+    this.mouse.x = x;
+    this.mouse.y = y;
+    this.mouse.down = true;
+
+    /* 1. Stage Exit Button in top header (x: 640..760, y: 0..48) */
+    if (this.phase !== 'playing' && this.phase !== 'hub') {
+      if (this._inRect(x, y, 640, 0, 120, 48)) {
+        this.phase = 'playing';
+        this._playSound('click');
+        return;
+      }
+    }
+
+    /* 2. Wires drag start */
+    if (this.phase === 'wires' && !this.wires.solved) {
+      for (let i = 0; i < this.wires.lefts.length; i++) {
+        const l = this.wires.lefts[i];
+        if (l.connectedTo === null && this._dist(x, y, l.x, l.y) < 38) {
+          this.wires.dragging = i;
+          this._playSound('click');
+          break;
+        }
+      }
+    }
+
+    /* 3. Galley hold fill button */
+    if (this.phase === 'galley' && this.galleyStage.state === 'fill') {
+      if (this._inRect(x, y, 260, 370, 240, 70)) {
+        this.galleyStage.isHoldingFill = true;
+      }
+    }
+
+    /* 4. Comms sliders drag start */
+    if (this.phase === 'comms' && !this.commsStage.solved) {
+      if (this._inRect(x, y, 140, 320, 480, 50)) {
+        this.commsStage.draggingSlider = 'freq';
+        this._updateCommsFromTouch(x);
+      } else if (this._inRect(x, y, 140, 370, 480, 50)) {
+        this.commsStage.draggingSlider = 'amp';
+        this._updateCommsFromTouch(x);
+      }
+    }
+
+    /* 5. Canadarm2 arm target */
+    if (this.phase === 'arm') {
+      this.arm.targetX = x;
+      this.arm.targetY = y;
+    }
+
+    /* 6. Station Map tap to walk or interact */
+    if (this.phase === 'playing') {
+      this._handleStationTouchTap(x, y);
+    }
+  }
+
+  _onTouchMove(e) {
+    if (!this.canvas) return;
+    if (e.cancelable) e.preventDefault();
+    const { x, y } = this._getCanvasCoords(e);
+    this.mouse.x = x;
+    this.mouse.y = y;
+
+    if (this.phase === 'comms' && this.commsStage.draggingSlider) {
+      this._updateCommsFromTouch(x);
+    }
+
+    if (this.phase === 'arm') {
+      this.arm.targetX = x;
+      this.arm.targetY = y;
+    }
+  }
+
+  _onTouchEnd(e) {
+    if (!this.canvas) return;
+    if (e.cancelable) e.preventDefault();
+    const { x, y } = this._getCanvasCoords(e);
+    this.mouse.x = x;
+    this.mouse.y = y;
+    this.mouse.down = false;
+
+    /* Wires drag release & snap */
+    if (this.phase === 'wires' && this.wires.dragging !== null) {
+      const lIdx = this.wires.dragging;
+      const left = this.wires.lefts[lIdx];
+      let snapped = false;
+
+      for (let j = 0; j < this.wires.rights.length; j++) {
+        const right = this.wires.rights[j];
+        if (!right.connected && this._dist(x, y, right.x, right.y) < 45) {
+          if (left.id === right.id) {
+            left.connectedTo = j;
+            right.connected  = true;
+            snapped = true;
+            this._playSound('correct');
+            this.wires.sparks.push({ x: right.x, y: right.y, t: 0.5 });
+
+            if (this.wires.lefts.every(l => l.connectedTo !== null)) {
+              this.wires.solved = true;
+              this.wires.timer  = 1.8;
+              this._completeTask('emergency', 'emergency');
+            }
+          }
+          break;
+        }
+      }
+      if (!snapped) {
+        this._playSound('click');
+      }
+      this.wires.dragging = null;
+      return;
+    }
+
+    /* Galley release fill */
+    if (this.phase === 'galley' && this.galleyStage.isHoldingFill) {
+      this.galleyStage.isHoldingFill = false;
+      this._checkGalleyFill();
+    }
+
+    /* Comms release slider */
+    if (this.phase === 'comms') {
+      this.commsStage.draggingSlider = null;
+    }
+
+    /* Stage-specific tap triggers */
+    if (this.phase === 'fanPuzzle' && !this.fanPuzzle.solved) {
+      this._onFanPuzzleClick();
+    } else if (this.phase === 'galley') {
+      this._onGalleyClick();
+    } else if (this.phase === 'exercise' && !this.exerciseStage.solved) {
+      this._onExerciseClick();
+    } else if (this.phase === 'arm') {
+      this._tryLatch();
+    }
+  }
+
+  _onTouchCancel(e) {
+    this.mouse.down = false;
+    if (this.phase === 'wires') this.wires.dragging = null;
+    if (this.phase === 'galley') this.galleyStage.isHoldingFill = false;
+    if (this.phase === 'comms') this.commsStage.draggingSlider = null;
+  }
+
+  _updateCommsFromTouch(mx) {
+    const sx = Math.max(180, Math.min(580, mx));
+    const ratio = (sx - 180) / 400;
+    if (this.commsStage.draggingSlider === 'freq') {
+      this.commsStage.playerFreq = 1.0 + ratio * 5.0;
+    } else if (this.commsStage.draggingSlider === 'amp') {
+      this.commsStage.playerAmp = 10 + ratio * 50;
+    }
+    this._checkCommsLock();
+  }
+
+  _handleStationTouchTap(x, y) {
+    const p = this.player;
+    const cons = this.consoles;
+    const interactDist = 42;
+
+    for (const [key, c] of Object.entries(cons)) {
+      if (this._dist(x, y, c.x, c.y) < 36) {
+        if (this._dist(p.x, p.y, c.x, c.y) < interactDist) {
+          this._tryInteractConsole();
+        } else {
+          p.target = { x: c.x, y: c.y, autoInteract: true };
+          this._playSound('click');
+        }
+        return;
+      }
+    }
+
+    if (this._isWalkable(x, y)) {
+      p.target = { x, y, autoInteract: false };
+    }
+  }
+
+  _initTouchControls(canvasContainer) {
+    const existing = document.getElementById('station-touch-overlay');
+    if (existing) existing.remove();
+
+    const isAr = (window.cadetState && window.cadetState.state.lang === 'ar');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'station-touch-overlay';
+    overlay.style.cssText = `
+      position: absolute;
+      bottom: 12px;
+      left: 0;
+      right: 0;
+      padding: 0 16px;
+      display: ${this.touchControlsSpawned ? 'flex' : 'none'};
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+      z-index: 30;
+      user-select: none;
+      -webkit-user-select: none;
+    `;
+
+    // Joystick Base
+    const joyBase = document.createElement('div');
+    joyBase.id = 'touch-joystick-base';
+    joyBase.style.cssText = `
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(15,23,42,0.85) 0%, rgba(30,41,59,0.92) 100%);
+      border: 2.5px solid rgba(56,189,248,0.7);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6), 0 0 15px rgba(56,189,248,0.3);
+      position: relative;
+      pointer-events: auto;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    joyBase.innerHTML = `
+      <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%);color:rgba(56,189,248,0.6);font-size:10px;font-weight:900;">▲</div>
+      <div style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);color:rgba(56,189,248,0.6);font-size:10px;font-weight:900;">▼</div>
+      <div style="position:absolute;left:6px;top:50%;transform:translateY(-50%);color:rgba(56,189,248,0.6);font-size:10px;font-weight:900;">◀</div>
+      <div style="position:absolute;right:6px;top:50%;transform:translateY(-50%);color:rgba(56,189,248,0.6);font-size:10px;font-weight:900;">▶</div>
+      <div id="touch-joystick-stick" style="
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #38BDF8 0%, #0284C7 80%, #0369A1 100%);
+        border: 2px solid #E0F2FE;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 0 12px rgba(56,189,248,0.8);
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        cursor: grab;
+        touch-action: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #FFFFFF;
+        font-size: 16px;
+      ">🕹️</div>
+    `;
+
+    // Action Group (Right side)
+    const actionGroup = document.createElement('div');
+    actionGroup.id = 'touch-action-group';
+    actionGroup.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      pointer-events: auto;
+      touch-action: none;
+    `;
+
+    // Dedicated [ E ] button
+    const eBtn = document.createElement('button');
+    eBtn.id = 'touch-e-btn';
+    eBtn.style.cssText = `
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0284C7, #0369A1);
+      border: 3px solid #38BDF8;
+      color: #FFFFFF;
+      box-shadow: 0 4px 20px rgba(56,189,248,0.45), 0 2px 8px rgba(0,0,0,0.5);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.1s, box-shadow 0.15s, border-color 0.15s;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    `;
+    eBtn.innerHTML = `
+      <span style="font-size: 1.45rem; font-weight: 900; line-height: 1; font-family:'Outfit',sans-serif; text-shadow:0 2px 4px rgba(0,0,0,0.5);">E</span>
+      <span id="touch-e-btn-sub" style="font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.95;">${isAr ? 'تفاعل' : 'ACTION'}</span>
+    `;
+
+    actionGroup.appendChild(eBtn);
+    overlay.appendChild(joyBase);
+    overlay.appendChild(actionGroup);
+    canvasContainer.appendChild(overlay);
+
+    this._setupJoystickEvents(joyBase, joyBase.querySelector('#touch-joystick-stick'));
+    this._setupEButtonEvents(eBtn);
+  }
+
+  _setupJoystickEvents(base, stick) {
+    const maxR = 36;
+    let tracking = false;
+    let startX = 0, startY = 0;
+
+    const onStart = (clientX, clientY) => {
+      tracking = true;
+      const rect = base.getBoundingClientRect();
+      startX = rect.left + rect.width / 2;
+      startY = rect.top + rect.height / 2;
+      stick.style.transition = 'none';
+      onMove(clientX, clientY);
+    };
+
+    const onMove = (clientX, clientY) => {
+      if (!tracking) return;
+      const dx = clientX - startX;
+      const dy = clientY - startY;
+      const dist = Math.hypot(dx, dy);
+      let clampedX = dx;
+      let clampedY = dy;
+      if (dist > maxR) {
+        clampedX = (dx / dist) * maxR;
+        clampedY = (dy / dist) * maxR;
+      }
+      stick.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`;
+      this.joystick = {
+        x: clampedX / maxR,
+        y: clampedY / maxR,
+        active: true
+      };
+      if (this.player) {
+        this.player.target = null;
+      }
+    };
+
+    const onEnd = () => {
+      if (!tracking) return;
+      tracking = false;
+      stick.style.transition = 'transform 0.15s ease-out';
+      stick.style.transform = 'translate(-50%, -50%)';
+      this.joystick = { x: 0, y: 0, active: false };
+    };
+
+    base.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { base.setPointerCapture(e.pointerId); } catch(err) {}
+      onStart(e.clientX, e.clientY);
+    });
+    base.addEventListener('pointermove', (e) => {
+      if (tracking) {
+        e.preventDefault();
+        onMove(e.clientX, e.clientY);
+      }
+    });
+    base.addEventListener('pointerup', (e) => {
+      e.preventDefault();
+      try { base.releasePointerCapture(e.pointerId); } catch(err) {}
+      onEnd();
+    });
+    base.addEventListener('pointercancel', (e) => {
+      e.preventDefault();
+      try { base.releasePointerCapture(e.pointerId); } catch(err) {}
+      onEnd();
+    });
+
+    base.addEventListener('touchstart', (e) => {
+      if (e.cancelable) e.preventDefault();
+      const t = e.touches[0];
+      if (t) onStart(t.clientX, t.clientY);
+    }, { passive: false });
+    base.addEventListener('touchmove', (e) => {
+      if (e.cancelable) e.preventDefault();
+      const t = e.touches[0];
+      if (t) onMove(t.clientX, t.clientY);
+    }, { passive: false });
+    base.addEventListener('touchend', (e) => {
+      if (e.cancelable) e.preventDefault();
+      onEnd();
+    }, { passive: false });
+    base.addEventListener('touchcancel', (e) => {
+      if (e.cancelable) e.preventDefault();
+      onEnd();
+    }, { passive: false });
+  }
+
+  _setupEButtonEvents(eBtn) {
+    const triggerE = (e) => {
+      if (e && e.cancelable) e.preventDefault();
+      eBtn.style.transform = 'scale(0.9)';
+      setTimeout(() => { eBtn.style.transform = ''; }, 120);
+
+      if (navigator.vibrate) {
+        try { navigator.vibrate(25); } catch(err) {}
+      }
+
+      this._playSound('click');
+
+      if (this.phase === 'playing') {
+        this._tryInteractConsole();
+      } else if (this.phase === 'arm') {
+        this._tryLatch();
+      } else if (this.phase === 'exercise' && !this.exerciseStage.solved) {
+        if (!this.exerciseStage.lastStep || this.exerciseStage.lastStep === 'right') {
+          this._exerciseStep('left');
+        } else {
+          this._exerciseStep('right');
+        }
+      } else if (this.phase === 'galley') {
+        if (this.galleyStage.state === 'seal') {
+          this._onGalleyClick();
+        }
+      } else if (this.phase !== 'hub') {
+        this.phase = 'playing';
+      }
+    };
+
+    eBtn.addEventListener('pointerdown', triggerE);
+  }
+
+  _tryInteractConsole() {
+    const p = this.player;
+    const cons = this.consoles;
+    const interactDist = 44;
+
+    /* 1. Sleep Bay - Fan Grid */
+    if (this._dist(p.x, p.y, cons.sleep.x, cons.sleep.y) < interactDist) {
+      if (!this.tasksDone.sleep) {
+        this.fanPuzzle = this._freshFanPuzzleState();
+        this.phase = 'fanPuzzle';
+        this._playSound('click');
+        return;
+      }
+    }
+    /* 2. Galley - Food Prep */
+    else if (this._dist(p.x, p.y, cons.galley.x, cons.galley.y) < interactDist) {
+      if (!this.tasksDone.galley) {
+        this.galleyStage = this._freshGalleyState();
+        this.phase = 'galley';
+        this._playSound('click');
+        return;
+      }
+    }
+    /* 3. Emergency - Wires */
+    else if (this._dist(p.x, p.y, cons.emergency.x, cons.emergency.y) < interactDist) {
+      if (!this.tasksDone.emergency) {
+        this.wires = this._freshWiresState();
+        this.phase = 'wires';
+        this._playSound('click');
+        return;
+      }
+    }
+    /* 4. Exercise - Treadmill */
+    else if (this._dist(p.x, p.y, cons.exercise.x, cons.exercise.y) < interactDist) {
+      if (!this.tasksDone.exercise) {
+        this.exerciseStage = this._freshExerciseState();
+        this.phase = 'exercise';
+        this._playSound('click');
+        return;
+      }
+    }
+    /* 5. Comms - Radio Antenna */
+    else if (this._dist(p.x, p.y, cons.comms.x, cons.comms.y) < interactDist) {
+      if (!this.tasksDone.comms) {
+        this.commsStage = this._freshCommsState();
+        this.phase = 'comms';
+        this._playSound('click');
+        return;
+      }
+    }
+    /* 6. Arm Bay - Canadarm2 */
+    else if (this._dist(p.x, p.y, cons.armBay.x, cons.armBay.y) < interactDist) {
+      if (!this.tasksDone.armBay) {
+        this.arm = this._freshArmState();
+        this.phase = 'arm';
+        this._playSound('thruster');
+        return;
+      }
+    } else {
+      let closestKey = null;
+      let closestDist = 99999;
+      for (const [key, c] of Object.entries(cons)) {
+        if (!this.tasksDone[key]) {
+          const d = this._dist(p.x, p.y, c.x, c.y);
+          if (d < closestDist) {
+            closestDist = d;
+            closestKey = key;
+          }
+        }
+      }
+      if (closestKey && closestDist < 200) {
+        p.target = { x: cons[closestKey].x, y: cons[closestKey].y, autoInteract: true };
+        this._playSound('click');
+      }
+    }
+  }
+
+  toggleTouchControls(force) {
+    if (typeof force === 'boolean') {
+      this.touchControlsSpawned = force;
+    } else {
+      this.touchControlsSpawned = !this.touchControlsSpawned;
+    }
+
+    const overlay = document.getElementById('station-touch-overlay');
+    const toggleBtn = document.getElementById('game-touch-toggle-btn');
+    const toggleLabel = document.getElementById('game-touch-toggle-label');
+    const isAr = (window.cadetState && window.cadetState.state.lang === 'ar');
+
+    if (overlay) {
+      overlay.style.display = (this.touchControlsSpawned && (this.phase === 'playing' || this.phase === 'arm')) ? 'flex' : 'none';
+    }
+
+    if (toggleBtn && toggleLabel) {
+      if (this.touchControlsSpawned) {
+        toggleBtn.style.background = 'rgba(14,165,233,0.2)';
+        toggleBtn.style.borderColor = '#38BDF8';
+        toggleBtn.style.color = '#38BDF8';
+        toggleBtn.style.boxShadow = '0 0 12px rgba(56,189,248,0.4)';
+        toggleLabel.textContent = isAr ? 'تحكم اللمس (مفعل)' : 'Touch / Joystick (ON)';
+      } else {
+        toggleBtn.style.background = '#0F172A';
+        toggleBtn.style.borderColor = '#334155';
+        toggleBtn.style.color = '#94A3B8';
+        toggleBtn.style.boxShadow = 'none';
+        toggleLabel.textContent = isAr ? 'إظهار أذرع اللمس' : 'Spawn Touch / Joystick';
+      }
+    }
+
+    this._playSound('click');
+    if (this.touchControlsSpawned) {
+      this._addNotification(isAr ? '🕹️ تم تفعيل ذراع التحكم والزر [E]!' : '🕹️ Virtual Joystick & [E] Button Spawned!');
+    } else {
+      this._addNotification(isAr ? 'تم إخفاء أدوات التحكم' : 'Touch Controls Hidden');
+    }
+  }
+
+  _initSubgameTouchBar(wrap) {
+    const existing = document.getElementById('station-subgame-touchbar');
+    if (existing) existing.remove();
+
+    const bar = document.createElement('div');
+    bar.id = 'station-subgame-touchbar';
+    bar.style.cssText = 'width:100%;display:none;margin-top:6px;font-family:\'Outfit\',sans-serif;';
+    wrap.appendChild(bar);
+  }
+
+  _updateSubgameTouchBar() {
+    const bar = document.getElementById('station-subgame-touchbar');
+    const overlay = document.getElementById('station-touch-overlay');
+    const isAr = (window.cadetState && window.cadetState.state.lang === 'ar');
+
+    if (overlay) {
+      if (this.phase === 'playing' || this.phase === 'arm') {
+        overlay.style.display = this.touchControlsSpawned ? 'flex' : 'none';
+      } else {
+        overlay.style.display = 'none';
+      }
+    }
+
+    if (!bar) return;
+
+    if (this.phase === 'playing' || this.phase === 'hub') {
+      bar.innerHTML = '';
+      bar.style.display = 'none';
+      return;
+    }
+
+    bar.style.display = 'flex';
+
+    if (this.phase === 'exercise') {
+      bar.innerHTML = `
+        <div style="display:flex;gap:10px;width:100%;max-width:520px;margin:6px auto 0;justify-content:center;">
+          <button id="touch-pedal-left" style="flex:1;padding:12px;background:#15803D;color:#FFF;border:2px solid #22C55E;border-radius:12px;font-size:1rem;font-weight:800;cursor:pointer;touch-action:manipulation;box-shadow:0 4px 14px rgba(34,197,94,0.3);">
+            ◀ ${isAr ? 'الخطوة اليسرى [A]' : 'LEFT STEP [A]'}
+          </button>
+          <button id="touch-pedal-right" style="flex:1;padding:12px;background:#15803D;color:#FFF;border:2px solid #22C55E;border-radius:12px;font-size:1rem;font-weight:800;cursor:pointer;touch-action:manipulation;box-shadow:0 4px 14px rgba(34,197,94,0.3);">
+            ${isAr ? 'الخطوة اليمنى [D]' : 'RIGHT STEP [D]'} ▶
+          </button>
+          <button id="touch-stage-exit-quick" style="padding:12px 14px;background:#1E293B;color:#FCA5A5;border:1.5px solid #EF4444;border-radius:12px;font-size:0.85rem;font-weight:800;cursor:pointer;touch-action:manipulation;">
+            ✕ ${isAr ? 'خروج' : 'Exit'}
+          </button>
+        </div>
+      `;
+      bar.querySelector('#touch-pedal-left')?.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this._exerciseStep('left');
+      });
+      bar.querySelector('#touch-pedal-right')?.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this._exerciseStep('right');
+      });
+      bar.querySelector('#touch-stage-exit-quick')?.addEventListener('click', () => {
+        this.phase = 'playing';
+        this._playSound('click');
+      });
+    } else if (this.phase === 'galley') {
+      bar.innerHTML = `
+        <div style="display:flex;gap:10px;width:100%;max-width:520px;margin:6px auto 0;justify-content:center;">
+          <button id="touch-galley-fill-btn" style="flex:1.2;padding:12px;background:#0284C7;color:#FFF;border:2px solid #38BDF8;border-radius:12px;font-size:0.95rem;font-weight:800;cursor:pointer;touch-action:none;box-shadow:0 4px 14px rgba(56,189,248,0.35);">
+            💧 ${isAr ? 'اضغط مطولاً لضخ الماء' : 'HOLD TO INJECT WATER'}
+          </button>
+          <button id="touch-galley-seal-btn" style="flex:1;padding:12px;background:#D97706;color:#FFF;border:2px solid #F59E0B;border-radius:12px;font-size:0.95rem;font-weight:800;cursor:pointer;touch-action:manipulation;box-shadow:0 4px 14px rgba(245,158,11,0.35);">
+            ✨ ${isAr ? 'إغلاق الكيس' : 'SEAL POUCH'}
+          </button>
+          <button id="touch-stage-exit-quick" style="padding:12px 14px;background:#1E293B;color:#FCA5A5;border:1.5px solid #EF4444;border-radius:12px;font-size:0.85rem;font-weight:800;cursor:pointer;touch-action:manipulation;">
+            ✕ ${isAr ? 'خروج' : 'Exit'}
+          </button>
+        </div>
+      `;
+      const fillBtn = bar.querySelector('#touch-galley-fill-btn');
+      if (fillBtn) {
+        const startFill = (e) => {
+          if (e.cancelable) e.preventDefault();
+          if (this.galleyStage.state === 'fill') {
+            this.galleyStage.isHoldingFill = true;
+            fillBtn.style.background = '#0369A1';
+          }
+        };
+        const stopFill = (e) => {
+          if (e.cancelable) e.preventDefault();
+          if (this.galleyStage.isHoldingFill) {
+            this.galleyStage.isHoldingFill = false;
+            fillBtn.style.background = '#0284C7';
+            this._checkGalleyFill();
+          }
+        };
+        fillBtn.addEventListener('pointerdown', startFill);
+        fillBtn.addEventListener('pointerup', stopFill);
+        fillBtn.addEventListener('pointercancel', stopFill);
+        fillBtn.addEventListener('touchstart', startFill, { passive: false });
+        fillBtn.addEventListener('touchend', stopFill, { passive: false });
+      }
+      bar.querySelector('#touch-galley-seal-btn')?.addEventListener('click', () => {
+        this._onGalleyClick();
+      });
+      bar.querySelector('#touch-stage-exit-quick')?.addEventListener('click', () => {
+        this.phase = 'playing';
+        this._playSound('click');
+      });
+    } else if (this.phase === 'arm') {
+      bar.innerHTML = `
+        <div style="display:flex;gap:10px;width:100%;max-width:520px;margin:6px auto 0;justify-content:center;">
+          <button id="touch-arm-latch-btn" style="flex:1;padding:12px;background:#0891B2;color:#FFF;border:2px solid #22D3EE;border-radius:12px;font-size:1rem;font-weight:800;cursor:pointer;touch-action:manipulation;box-shadow:0 4px 14px rgba(34,211,238,0.35);">
+            🦾 ${isAr ? 'التقاط / تثبيت الحمولة' : 'LATCH / DOCK CARGO'}
+          </button>
+          <button id="touch-stage-exit-quick" style="padding:12px 14px;background:#1E293B;color:#FCA5A5;border:1.5px solid #EF4444;border-radius:12px;font-size:0.85rem;font-weight:800;cursor:pointer;touch-action:manipulation;">
+            ✕ ${isAr ? 'خروج' : 'Exit'}
+          </button>
+        </div>
+      `;
+      bar.querySelector('#touch-arm-latch-btn')?.addEventListener('click', () => {
+        this._tryLatch();
+      });
+      bar.querySelector('#touch-stage-exit-quick')?.addEventListener('click', () => {
+        this.phase = 'playing';
+        this._playSound('click');
+      });
+    } else {
+      bar.innerHTML = `
+        <div style="display:flex;gap:10px;width:100%;max-width:520px;margin:6px auto 0;justify-content:space-between;align-items:center;">
+          <div style="color:#94A3B8;font-size:0.8rem;font-weight:700;">
+            📱 ${isAr ? 'المس العناصر مباشرة على الشاشة لحل المرحلة' : 'Touch puzzle elements on screen directly to interact'}
+          </div>
+          <button id="touch-stage-exit-quick" style="padding:8px 14px;background:#1E293B;color:#FCA5A5;border:1.5px solid #EF4444;border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer;touch-action:manipulation;">
+            ✕ ${isAr ? 'خروج إلى المحطة' : 'Exit to Station'}
+          </button>
+        </div>
+      `;
+      bar.querySelector('#touch-stage-exit-quick')?.addEventListener('click', () => {
+        this.phase = 'playing';
+        this._playSound('click');
+      });
     }
   }
 
@@ -956,6 +1698,11 @@ class AstronautTrainingManager {
     const dt = Math.min((ts - this.lastTime) / 1000, 0.05);
     this.lastTime = ts;
 
+    if (this._lastPhase !== this.phase) {
+      this._lastPhase = this.phase;
+      this._updateSubgameTouchBar();
+    }
+
     switch(this.phase) {
       case 'playing':
         this._updatePlaying(dt);
@@ -1001,19 +1748,50 @@ class AstronautTrainingManager {
     if (this.keys['ArrowUp']    || this.keys['KeyW']) dy -= 1;
     if (this.keys['ArrowDown']  || this.keys['KeyS']) dy += 1;
 
-    if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
-    if (dx !== 0 || dy !== 0) p.dir = Math.atan2(dy, dx);
+    /* Virtual joystick analog 360-degree input */
+    if (this.joystick && this.joystick.active) {
+      const jx = this.joystick.x;
+      const jy = this.joystick.y;
+      if (Math.hypot(jx, jy) > 0.12) {
+        dx += jx;
+        dy += jy;
+      }
+    }
 
-    const nx = p.x + dx * spd * dt;
-    const ny = p.y + dy * spd * dt;
-    if (this._isWalkable(nx, p.y)) p.x = nx;
-    if (this._isWalkable(p.x, ny)) p.y = ny;
+    /* Tap-to-move destination navigation */
+    if (p.target && (!this.joystick || !this.joystick.active)) {
+      const tdx = p.target.x - p.x;
+      const tdy = p.target.y - p.y;
+      const tdist = Math.hypot(tdx, tdy);
+      if (tdist < 8) {
+        const wasAutoInteract = p.target.autoInteract;
+        p.target = null;
+        if (wasAutoInteract) {
+          this._tryInteractConsole();
+        }
+      } else {
+        dx += tdx / tdist;
+        dy += tdy / tdist;
+      }
+    }
+
+    if (dx !== 0 || dy !== 0) {
+      const mag = Math.hypot(dx, dy);
+      const normX = dx / Math.max(1, mag);
+      const normY = dy / Math.max(1, mag);
+      p.dir = Math.atan2(normY, normX);
+
+      const nx = p.x + normX * spd * dt;
+      const ny = p.y + normY * spd * dt;
+      if (this._isWalkable(nx, p.y)) p.x = nx;
+      if (this._isWalkable(p.x, ny)) p.y = ny;
+    }
 
     this.activePrompt = '';
 
     /* Check proximity to room consoles to enter stages */
     const cons = this.consoles;
-    const interactDist = 38;
+    const interactDist = 42;
 
     /* 1. Sleep Bay - Fan Grid */
     if (this._dist(p.x, p.y, cons.sleep.x, cons.sleep.y) < interactDist) {
@@ -1102,6 +1880,25 @@ class AstronautTrainingManager {
         }
       } else {
         this.activePrompt = '✓ Cargo Docking Complete';
+      }
+    }
+
+    /* Update visual state of on-screen [E] button */
+    const eBtn = document.getElementById('touch-e-btn');
+    const eSub = document.getElementById('touch-e-btn-sub');
+    if (eBtn) {
+      const isNear = Boolean(this.activePrompt && this.activePrompt.startsWith('[ E ]'));
+      const isAr = (window.cadetState && window.cadetState.state.lang === 'ar');
+      if (isNear) {
+        eBtn.style.borderColor = '#FACC15';
+        eBtn.style.boxShadow = '0 0 25px rgba(250,204,21,0.85), 0 0 10px rgba(56,189,248,0.9)';
+        eBtn.style.transform = 'scale(1.08)';
+        if (eSub) eSub.textContent = isAr ? 'دخول' : 'ENTER';
+      } else {
+        eBtn.style.borderColor = '#38BDF8';
+        eBtn.style.boxShadow = '0 4px 15px rgba(56,189,248,0.35)';
+        eBtn.style.transform = 'scale(1.0)';
+        if (eSub) eSub.textContent = isAr ? 'تفاعل' : 'ACTION';
       }
     }
 
@@ -1234,6 +2031,19 @@ class AstronautTrainingManager {
     cx.font = '18px sans-serif';
     cx.textAlign = 'center';
     cx.fillText('🧑‍🚀', p.x, p.y+6);
+
+    /* Draw tap-to-move destination indicator */
+    if (p.target) {
+      const time = performance.now() / 1000;
+      const pulse = 0.5 + 0.5 * Math.abs(Math.sin(time * 4));
+      cx.beginPath();
+      cx.arc(p.target.x, p.target.y, 7, 0, Math.PI * 2);
+      cx.strokeStyle = `rgba(56,189,248,${pulse * 0.9})`;
+      cx.lineWidth = 2;
+      cx.stroke();
+      cx.fillStyle = `rgba(56,189,248,${pulse * 0.3})`;
+      cx.fill();
+    }
   }
 
   _drawHUD(cx) {
@@ -1271,9 +2081,12 @@ class AstronautTrainingManager {
 
   _drawPrompt(cx) {
     if (!this.activePrompt) return;
+    const displayText = this.touchControlsSpawned
+      ? this.activePrompt.replace('[ E ]', '🔵 [E]')
+      : this.activePrompt;
     cx.fillStyle = 'rgba(14,22,42,0.92)';
     cx.beginPath();
-    cx.roundRect(760/2 - 180, 452, 360, 24, 6);
+    cx.roundRect(760/2 - 200, 450, 400, 26, 6);
     cx.fill();
     cx.strokeStyle = '#38BDF8';
     cx.lineWidth = 1;
@@ -1281,7 +2094,7 @@ class AstronautTrainingManager {
     cx.font      = 'bold 11px Outfit,sans-serif';
     cx.fillStyle = '#38BDF8';
     cx.textAlign = 'center';
-    cx.fillText(this.activePrompt, 760/2, 468);
+    cx.fillText(displayText, 760/2, 467);
   }
 
   _drawNotifications(cx) {
