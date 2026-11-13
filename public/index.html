@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kilonaut - Space Science Mission Control & Academy</title>
+  <meta name="description" content="Kilonaut: Interactive bilingual space science mission control deck and astronomy learning academy for explorers ages 7-12.">
+
+  <!-- Tailwind CSS CDN for high-speed cosmic styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            space: {
+              950: '#0B0F19',
+              900: '#111827',
+              800: '#1E293B',
+              700: '#334155',
+            },
+            solar: '#F59E0B',
+            orbital: '#38BDF8',
+            nebula: '#A855F7',
+            emerald: '#10B981',
+            supernova: '#EC4899'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Core Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%200%22%20100%22%20100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+</head>
+<body class="bg-[#0B0F19] text-slate-100 min-h-screen flex flex-col font-latin">
+
+  <!-- Ambient Animated Starfield Background -->
+  <div class="starfield-bg"></div>
+
+  <!-- Top Bar: Mission Control Deck Header -->
+  <header class="sticky top-0 z-40 bg-[#111827]/90 backdrop-blur-md border-b border-[#334155] px-4 py-3 shadow-xl">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Logo & Academy Title -->
+      <div class="flex items-center space-x-3 rtl:space-x-reverse cursor-pointer" onclick="window.academyApp.showDeck()">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-purple-500 to-sky-400 p-0.5 shadow-lg shadow-sky-500/20">
+          <div class="w-full h-full bg-[#0B0F19] rounded-[10px] flex items-center justify-center text-xl">
+            🚀
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="badge-tag">KILONAUT</span>
+            <span class="text-xs text-amber-400 font-mono tracking-wider uppercase font-bold">SPACE ACADEMY</span>
+          </div>
+          <h1 class="text-base sm:text-lg font-extrabold text-white tracking-tight" data-i18n="appTitle">
+            Kilonaut
+          </h1>
+        </div>
+      </div>
+
+      <!-- Center Telemetry: Call-Sign, Rank, XP Points -->
+      <div class="flex items-center gap-2 sm:gap-3 bg-[#1E293B]/80 border border-[#334155] px-3 py-1.5 rounded-2xl shadow-inner">
+        <!-- Avatar & Call-Sign -->
+        <div class="flex items-center gap-2 pr-2 rtl:pr-0 rtl:pl-2 border-r rtl:border-r-0 rtl:border-l border-slate-700">
+          <span id="deck-avatar-icon" class="text-xl">🧑‍🚀</span>
+          <div>
+            <span class="text-[10px] text-slate-400 font-mono block leading-none" data-i18n="callSign">Call-Sign</span>
+            <span id="deck-callsign" class="text-xs sm:text-sm font-bold text-cyan-300">Nova Scout</span>
+          </div>
+        </div>
+
+        <!-- Rank Badge -->
+        <div class="px-1 sm:px-2">
+          <span class="text-[10px] text-slate-400 font-mono block leading-none" data-i18n="rank">Rank</span>
+          <span id="deck-rank-badge" class="text-xs sm:text-sm font-bold text-amber-400 flex items-center">
+            <span>🚀</span> Cadet
+          </span>
+        </div>
+
+        <!-- Star Points / XP -->
+        <div class="pl-2 rtl:pl-0 rtl:pr-2 border-l rtl:border-l-0 rtl:border-r border-slate-700">
+          <span id="deck-xp-counter" class="text-xs sm:text-sm font-bold text-emerald-400 font-mono bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-500/40">
+            ⭐ 0 XP
+          </span>
+        </div>
+      </div>
+
+      <!-- Right Action Controls -->
+      <div class="flex items-center gap-2">
+        <!-- Astronaut Training Button -->
+        <button id="nav-training-btn" class="px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border border-cyan-400/50 rounded-xl text-white text-xs font-bold transition flex items-center gap-1.5 active:scale-95 shadow-md shadow-cyan-500/20">
+          <span>🧑‍🚀</span>
+          <span class="hidden sm:inline" data-i18n="astronautTraining">Astronaut Training</span>
+        </button>
+
+        <!-- Flight Log & Passport -->
+        <button id="passport-btn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-amber-300 text-xs font-bold transition flex items-center gap-1.5 active:scale-95">
+          <span>📜</span>
+          <span class="hidden md:inline" data-i18n="flightLog">Passport</span>
+        </button>
+
+        <!-- Audio Mute/Unmute Toggle -->
+        <button id="audio-toggle-btn" class="p-2 sm:px-3 sm:py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300 text-xs font-bold transition flex items-center gap-1 active:scale-95" title="Audio Toggle">
+          🔊 <span class="hidden sm:inline">Audio</span>
+        </button>
+
+        <!-- One-Click AR/EN Language Switch -->
+        <button id="lang-toggle-btn" class="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-extrabold rounded-xl shadow-lg transition active:scale-95">
+          العربية
+        </button>
+
+        <!-- Logout / Sign Out -->
+        <button id="nav-logout-btn" class="p-2 sm:px-3 sm:py-1.5 bg-slate-800 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-500/50 rounded-xl text-slate-300 hover:text-rose-300 text-xs font-bold transition flex items-center gap-1 active:scale-95" title="Sign Out">
+          <span>🚪</span>
+          <span class="hidden sm:inline" data-i18n="logout">Sign Out</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col">
+
+    <!-- VIEW 1: MISSION CONTROL DECK -->
+    <section id="view-deck" class="flex-1 flex flex-col">
+      <!-- Kilonaut Academy Greeting Banner -->
+      <div class="mb-6 p-6 rounded-3xl bg-gradient-to-r from-[#1E293B] via-[#0F172A] to-[#1E293B] border border-[#334155] shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-4">
+          <div class="w-16 h-16 rounded-2xl bg-cyan-600/20 border-2 border-cyan-400 flex items-center justify-center text-3xl shadow-lg shadow-cyan-500/20">
+            🚀
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="badge-tag">KILONAUT SPACE ACADEMY</span>
+              <span class="text-xs text-emerald-400 font-mono">● MISSION CONTROL ONLINE</span>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-black text-white mt-1" data-i18n="deckTitle">
+              Kilonaut Mission Control Deck
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed" data-i18n="deckSub">
+              Welcome Cadet! Select a cosmic mission sector to begin your flight certification across the solar system, deep space moons, and galactic frontiers.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Dedicated Section: Astronaut Training Facility Showcase -->
+      <div id="deck-training-card" class="mb-6 p-6 rounded-3xl bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border-2 border-cyan-400/60 shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 hover:border-cyan-300 transition-all duration-300 cursor-pointer group">
+        <div class="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none group-hover:bg-cyan-500/20 transition-all"></div>
+        
+        <div class="flex items-center gap-4 z-10">
+          <div id="deck-training-icon-box" class="w-16 h-16 rounded-2xl bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center text-3xl shadow-lg shadow-cyan-500/20 group-hover:scale-105 transition-transform">
+            🧑‍🚀
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="deck-training-badge-tag" class="badge-tag bg-cyan-950/80 text-cyan-300 border-cyan-400 font-mono uppercase" data-i18n="trainingBadgeTag">
+                HUMAN SPACEFLIGHT PROGRAM
+              </span>
+              <span id="deck-training-status-tag" class="text-xs text-amber-400 font-mono font-bold">★ SPECIAL SECTION</span>
+            </div>
+            <h3 class="text-xl sm:text-2xl font-black text-white group-hover:text-cyan-300 transition-colors mt-1" data-i18n="trainingFacility">
+              Astronaut Training Facility
+            </h3>
+            <p id="deck-training-desc" class="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed" data-i18n="trainingFacilitySub">
+              Welcome to the astronaut conditioning and flight preparation center! Experience true microgravity, prepare an EVA spacesuit, live a 24-hour ISS day, tackle critical orbital emergencies, coordinate crew teamwork, and perform robotic arm cargo docking.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row items-center gap-3 z-10 w-full md:w-auto">
+          <div class="text-center md:text-right px-3 py-1 font-mono text-xs">
+            <span id="deck-training-progress-count" class="text-cyan-400 font-bold text-sm block">0 / 6 Certified</span>
+            <span id="deck-training-progress-sub" class="text-[10px] text-slate-400">6 Interactive Labs</span>
+          </div>
+          <button id="deck-training-cta-btn" class="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black rounded-xl text-xs shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
+            <span id="deck-training-btn-icon">🧑‍🚀</span>
+            <span id="deck-training-btn-text" data-i18n="enterTrainingSection">Launch Training Modules →</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3 Cosmic Astronomy Exploration Sectors -->
+      <div class="mb-3 flex items-center justify-between">
+        <h3 class="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider font-mono">
+          COSMIC EXPLORATION SECTORS (3 DEEP SPACE SECTORS)
+        </h3>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="sectors-grid">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </section>
+
+    <!-- VIEW 2: SECTOR STAGES MAP -->
+    <section id="view-sector" class="hidden flex-1 flex flex-col">
+      <!-- Sector Header & Back Action -->
+      <div class="mb-6 flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-[#1E293B] border border-[#334155]">
+        <div>
+          <button id="back-to-deck-btn" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 mb-2">
+            <span data-i18n="backToDeck">← Return to Mission Control</span>
+          </button>
+          <h2 id="sector-title" class="text-2xl font-black text-white"></h2>
+          <p id="sector-desc" class="text-xs sm:text-sm text-slate-300 mt-1 max-w-3xl"></p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="badge-tag">KILONAUT TRAINING LAB</span>
+        </div>
+      </div>
+
+      <!-- 3 Progressive Stages Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="stages-grid">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </section>
+
+    <!-- VIEW 3: STAGE LAB (Split Desktop Layout) -->
+    <section id="view-lab" class="hidden flex-1 flex flex-col">
+      <!-- Stage Breadcrumb & Header -->
+      <div class="mb-4 flex items-center justify-between">
+        <button id="back-to-sector-btn" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+          <span data-i18n="backToSector">← Back to Sector Map</span>
+        </button>
+        <span id="lab-stage-num" class="badge-tag"></span>
+      </div>
+
+      <!-- Split Desktop Layout (Canvas Simulation + Science Briefing) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-stretch">
+        
+        <!-- Left / Top: Interactive Visual Simulation Canvas -->
+        <div class="lg:col-span-7 flex flex-col rounded-3xl bg-[#0F172A] border border-[#334155] shadow-2xl overflow-hidden relative min-h-[380px]">
+          <canvas id="simulation-canvas" class="w-full flex-1 block"></canvas>
+        </div>
+
+        <!-- Right / Bottom: Science Briefing, Audio Narration & Launch Challenge Action -->
+        <div class="lg:col-span-5 flex flex-col justify-between p-6 rounded-3xl bg-[#1E293B] border border-[#334155] shadow-2xl space-y-4">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="badge-tag">KILONAUT SCIENTIFIC TELEMETRY</span>
+              <button id="lab-narration-btn" class="px-3 py-1 bg-purple-900/60 hover:bg-purple-800 border border-purple-500 rounded-lg text-purple-200 text-xs font-bold transition flex items-center gap-1">
+                🔊 Read Aloud
+              </button>
+            </div>
+
+            <h3 id="lab-title" class="text-xl sm:text-2xl font-bold text-amber-400 mb-3"></h3>
+            
+            <p id="lab-brief" class="text-xs sm:text-sm text-slate-200 leading-relaxed mb-4"></p>
+
+            <!-- Key Astronomy Facts Box -->
+            <div class="p-4 rounded-2xl bg-[#0F172A] border border-slate-700 space-y-2">
+              <div class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider font-mono">
+                🔭 Key Astronomy Observations:
+              </div>
+              <div class="flex items-start gap-2 text-xs text-slate-300">
+                <span class="text-amber-400">✦</span>
+                <span id="lab-fact1"></span>
+              </div>
+              <div class="flex items-start gap-2 text-xs text-slate-300">
+                <span class="text-amber-400">✦</span>
+                <span id="lab-fact2"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Primary CTA Button: Launch Stage Challenge -->
+          <div class="pt-4 border-t border-slate-700">
+            <button id="launch-challenge-btn" class="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-base rounded-2xl shadow-xl transition active:scale-[0.98] flex items-center justify-center gap-2">
+              🚀 Launch Stage Challenge
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- VIEW 4: CHALLENGE ARENA -->
+    <section id="view-challenge" class="hidden flex-1 flex flex-col">
+      <div class="mb-4">
+        <button id="back-to-lab-btn" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+          ← Return to Stage Lab
+        </button>
+      </div>
+
+      <!-- NASA CCMC DONKI Space Weather Global Banner (For All Challenges) -->
+      <div id="donki-space-weather-ribbon" class="max-w-2xl mx-auto w-full mb-3"></div>
+
+      <!-- Mount Target for Challenge Activity -->
+      <div id="challenge-arena-container" class="max-w-2xl mx-auto w-full">
+        <!-- Rendered dynamically by challenges.js -->
+      </div>
+    </section>
+
+    <!-- VIEW 5: ASTRONAUT TRAINING SECTION -->
+    <section id="view-training" class="hidden flex-1 flex flex-col">
+      <div id="training-content-area" class="w-full">
+        <!-- Rendered dynamically by astronaut-training.js -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL 1: ONBOARDING / CADET SETUP -->
+  <div id="onboarding-modal" class="modal-backdrop hidden">
+    <div class="modal-content p-6 sm:p-8 border-2 border-amber-500/80">
+      
+      <div class="flex items-center gap-4 mb-4">
+        <div class="w-14 h-14 rounded-2xl bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center text-3xl shadow">
+          🤖
+        </div>
+        <div>
+          <span class="badge-tag">KILONAUT CADET INDUCTION</span>
+          <h2 class="text-xl sm:text-2xl font-black text-white mt-1" data-i18n="welcomeCadet">
+            Welcome to Kilonaut!
+          </h2>
+        </div>
+      </div>
+
+      <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-5" data-i18n="welcomeSub">
+        Prepare for departure across the solar system, black holes, and the outer galaxies. No account needed — enter your astronaut call-sign and pick your avatar to launch!
+      </p>
+
+      <!-- Call-Sign Input -->
+      <div class="mb-5">
+        <label class="block text-xs font-bold text-amber-300 mb-2 font-mono uppercase" data-i18n="enterCallSign">
+          Enter Astronaut Call-Sign:
+        </label>
+        <div class="flex gap-2">
+          <input type="text" id="onboarding-callsign" maxlength="24" placeholder="e.g. Orion Scout, Nova Ranger" class="flex-1 bg-slate-900 border border-slate-700 focus:border-amber-400 px-4 py-2.5 rounded-xl text-sm text-white outline-none">
+          <button id="random-callsign-btn" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-xl text-slate-300 border border-slate-700" data-i18n="randomCallSign">
+            🎲 Random
+          </button>
+        </div>
+      </div>
+
+      <!-- Avatar Picker -->
+      <div class="mb-6">
+        <label class="block text-xs font-bold text-amber-300 mb-2 font-mono uppercase" data-i18n="pickAvatar">
+          Choose Your Mission Avatar:
+        </label>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          
+          <!-- Rover -->
+          <div class="avatar-option p-3 bg-slate-900 border border-slate-700 rounded-xl cursor-pointer hover:border-amber-400 transition text-center" data-avatar="rover">
+            <span class="text-3xl">🚜</span>
+            <div class="text-xs font-bold text-white mt-1" data-i18n="avatarRover">Lunar Rover</div>
+          </div>
+
+          <!-- Bear -->
+          <div class="avatar-option p-3 bg-slate-900 border border-slate-700 ring-4 ring-amber-400 bg-amber-950/40 rounded-xl cursor-pointer transition text-center" data-avatar="bear">
+            <span class="text-3xl">🐻</span>
+            <div class="text-xs font-bold text-white mt-1" data-i18n="avatarBear">Astro Bear</div>
+          </div>
+
+          <!-- Cat -->
+          <div class="avatar-option p-3 bg-slate-900 border border-slate-700 rounded-xl cursor-pointer hover:border-amber-400 transition text-center" data-avatar="cat">
+            <span class="text-3xl">🐱</span>
+            <div class="text-xs font-bold text-white mt-1" data-i18n="avatarCat">Rocket Cat</div>
+          </div>
+
+          <!-- Explorer -->
+          <div class="avatar-option p-3 bg-slate-900 border border-slate-700 rounded-xl cursor-pointer hover:border-amber-400 transition text-center" data-avatar="explorer">
+            <span class="text-3xl">🧑‍🚀</span>
+            <div class="text-xs font-bold text-white mt-1" data-i18n="avatarExplorer">Star Explorer</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Launch Academy Action -->
+      <button id="launch-academy-btn" class="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-base rounded-2xl shadow-xl transition active:scale-95" data-i18n="launchAcademy">
+        🚀 Launch Kilonaut Academy
+      </button>
+
+    </div>
+  </div>
+
+  <!-- MODAL 3: FLIGHT LOG, PASSPORT & GRADUATION CERTIFICATE -->
+  <div id="passport-modal" class="modal-backdrop hidden">
+    <div class="modal-content p-6 sm:p-8 border-2 border-amber-500/80 max-w-4xl">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-slate-700 mb-6">
+        <div class="flex items-center gap-3">
+          <span class="text-3xl">📜</span>
+          <div>
+            <h3 class="text-xl font-black text-white" data-i18n="passportTitle">Kilonaut Flight Passport</h3>
+            <p class="text-xs text-slate-400" data-i18n="passportSub">Official flight log, earned mission patches, and graduation telemetry</p>
+          </div>
+        </div>
+        <button class="close-passport-modal p-2 text-slate-400 hover:text-white rounded-lg">✕</button>
+      </div>
+
+      <!-- Telemetry Card -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-[#0F172A] border border-slate-700 mb-6">
+        <div>
+          <span class="text-[10px] font-mono text-slate-400 uppercase" data-i18n="callSign">Call-Sign</span>
+          <div id="passport-callsign" class="text-base font-bold text-cyan-300">Nova Scout</div>
+        </div>
+        <div>
+          <span class="text-[10px] font-mono text-slate-400 uppercase" data-i18n="rank">Current Rank</span>
+          <div id="passport-rank-title" class="text-base font-bold text-amber-400">Cadet</div>
+        </div>
+        <div>
+          <span class="text-[10px] font-mono text-slate-400 uppercase" data-i18n="totalXP">Star Points</span>
+          <div id="passport-xp-count" class="text-base font-bold text-emerald-400 font-mono">0 XP</div>
+        </div>
+        <div>
+          <span class="text-[10px] font-mono text-slate-400 uppercase" data-i18n="missionsDone">Missions Completed</span>
+          <div id="passport-missions-count" class="text-base font-bold text-purple-400 font-mono">0 / 9</div>
+        </div>
+      </div>
+
+      <!-- Rank Progress Bar -->
+      <div class="mb-6">
+        <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+          <span>Cadet (0 XP)</span>
+          <span>Pilot (300 XP)</span>
+          <span>Specialist (700 XP)</span>
+          <span>Commander (1200 XP)</span>
+        </div>
+        <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden p-0.5 border border-slate-700">
+          <div id="passport-rank-bar" class="h-full bg-gradient-to-r from-amber-500 via-sky-400 to-emerald-400 rounded-full transition-all duration-500" style="width: 10%;"></div>
+        </div>
+      </div>
+
+      <!-- 9 NASA / Kilonaut Mission Patches Grid -->
+      <div class="mb-8">
+        <h4 class="text-sm font-bold text-amber-400 uppercase tracking-wider mb-3 font-mono" data-i18n="badgesEarned">
+          Earned Mission Patches (9 Stages)
+        </h4>
+        <div id="passport-patches-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Share Action & Toast -->
+      <div class="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-900 rounded-2xl border border-slate-800 mb-8">
+        <div class="text-xs text-slate-300">
+          Ready to share your astronaut achievements with parents, friends, or evaluators?
+        </div>
+        <button id="share-passport-btn" class="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow transition flex items-center gap-2">
+          <span>📤</span> <span data-i18n="shareButton">Share Mission Patch</span>
+        </button>
+      </div>
+
+      <div id="share-toast" class="hidden p-3 bg-emerald-950 border border-emerald-500 rounded-xl text-emerald-300 text-xs mb-6 text-center font-bold"></div>
+
+      <!-- PRINTABLE JUNIOR ASTRONAUT CERTIFICATE SECTION -->
+      <div id="passport-cert-wrapper" class="border-t border-slate-700 pt-6">
+        <div class="flex items-center justify-between mb-4">
+          <h4 class="text-sm font-bold text-amber-400 uppercase tracking-wider font-mono">
+            Personalized Graduation Certificate
+          </h4>
+          <button id="print-cert-btn" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow flex items-center gap-1.5 print-hide">
+            <span>🖨️</span> <span data-i18n="certButton">Print Certificate</span>
+          </button>
+        </div>
+
+        <!-- The Printable Certificate Container -->
+        <div id="printable-certificate-area" class="p-8 sm:p-12 rounded-3xl bg-slate-950 border-4 border-amber-500 shadow-2xl text-center relative overflow-hidden">
+          <div class="absolute -right-16 -bottom-16 w-64 h-64 rounded-full bg-amber-500/10 blur-2xl pointer-events-none"></div>
+
+          <!-- Official Kilonaut Seal -->
+          <div class="w-20 h-20 mx-auto rounded-full bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center text-4xl mb-4 shadow">
+            ⭐
+          </div>
+
+          <h2 class="text-xs font-mono font-bold text-amber-400 tracking-widest uppercase mb-1" data-i18n="certSubtitle">
+            KILONAUT SPACE SCIENCE & ASTRONOMY ACADEMY
+          </h2>
+          <h1 class="text-2xl sm:text-4xl font-black text-white tracking-tight mb-4" data-i18n="certTitle">
+            JUNIOR ASTRONAUT CERTIFICATE
+          </h1>
+
+          <p class="text-xs sm:text-sm text-slate-300 max-w-lg mx-auto mb-2" data-i18n="certBody">
+            This hereby certifies that Cadet
+          </p>
+
+          <div id="cert-cadet-name" class="text-2xl sm:text-3xl font-extrabold text-amber-400 underline decoration-amber-500/50 underline-offset-8 my-2 font-mono">
+            NOVA SCOUT
+          </div>
+
+          <p class="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto my-3 leading-relaxed" data-i18n="certBody2">
+            has successfully demonstrated astronomical knowledge, orbital mechanics, planetary navigation, and stellar physics, achieving the honorable rank of
+          </p>
+
+          <div id="cert-cadet-rank" class="text-xl sm:text-2xl font-black text-cyan-400 tracking-wide font-mono uppercase mb-4">
+            CADET
+          </div>
+
+          <div class="flex items-center justify-center gap-6 text-xs text-slate-400 font-mono mb-8">
+            <div>Missions: <span id="cert-cadet-missions" class="text-white font-bold">0 / 9</span></div>
+            <div>Date: <span id="cert-date" class="text-white font-bold">November 11, 2026</span></div>
+            <div>Verification: <span id="cert-hash" class="text-amber-400 font-bold">KILONAUT-2026</span></div>
+          </div>
+
+          <!-- Signatures -->
+          <div class="grid grid-cols-2 gap-8 pt-6 border-t border-slate-800 max-w-md mx-auto text-center">
+            <div>
+              <div class="font-serif italic text-sm text-slate-300 font-bold mb-1">Kilonaut AI</div>
+              <div class="text-[10px] font-mono text-slate-400" data-i18n="certDirector">Kilonaut AI • Flight Director</div>
+            </div>
+            <div>
+              <div class="font-serif italic text-sm text-slate-300 font-bold mb-1">Kilonaut Command</div>
+              <div class="text-[10px] font-mono text-slate-400" data-i18n="certCommander">Kilonaut Academy Commander</div>
+            </div>
+          </div>
+
+          <div class="mt-6 text-[9px] font-mono text-slate-500 tracking-wider" data-i18n="certOfficialSeal">
+            VERIFIED ASTRONOMY CADET • KILONAUT SPACE ACADEMY
+          </div>
+        </div>
+
+        <!-- Blank Locked State Placeholder -->
+        <div id="cert-locked-placeholder" class="hidden p-8 sm:p-12 rounded-3xl bg-slate-900/40 border-2 border-dashed border-slate-800 text-center flex flex-col items-center justify-center">
+          <span class="text-3xl mb-2">🔒</span>
+          <h5 id="cert-locked-title" class="text-sm font-bold text-slate-400 font-mono mb-1">Graduation Certificate Locked</h5>
+          <p id="cert-locked-desc" class="text-xs text-slate-500 max-w-md">Complete all stages across Solar System Odyssey, Black Holes & Cosmic Mysteries, and Galactic Frontiers to unlock your official Junior Astronaut Certificate.</p>
+        </div>
+
+        <!-- Reset Button -->
+        <div class="mt-6 text-center print-hide">
+          <button id="reset-progress-btn" class="text-xs text-rose-400 hover:text-rose-300 font-mono">
+            ⚠️ Reset Cadet Flight Log & Start Fresh
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Application Scripts -->
+  <script src="js/audio.js"></script>
+  <script src="js/speech.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/sectors.js"></script>
+  <script src="js/confetti.js"></script>
+  <script src="js/simulations.js"></script>
+  <script src="js/challenges.js"></script>
+  <script src="js/astronaut-training.js"></script>
+  <script src="js/passport.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

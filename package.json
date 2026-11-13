@@ -1,0 +1,23 @@
+{
+  "name": "kilonaut",
+  "version": "1.0.0",
+  "description": "Kilonaut - Bilingual Space Learning & Mission Control Deck for young explorers ages 7-12",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "kilonaut",
+    "nasa",
+    "space-apps-challenge",
+    "junior-astronaut",
+    "astronomy",
+    "stem",
+    "education",
+    "arabic",
+    "english",
+    "bilingual"
+  ],
+  "author": "Kilonaut Academy Team",
+  "license": "MIT"
+}

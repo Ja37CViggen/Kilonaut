@@ -1,0 +1,14 @@
+# Ignored reference archives & downloaded external html files
+nasa data/
+*_files/
+*.download
+*.zip
+.env
+
+# Reference external web saves
+*Mars Trek*
+*CCMC DONKI*
+*NASA OSDR*
+*RadLab*
+*Toolkit for educators*
+WhatsApp Image*
